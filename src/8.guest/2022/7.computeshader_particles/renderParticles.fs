@@ -32,12 +32,14 @@ float rand(vec2 xi){
 }
 
 void main() {
-	float texCoord = smoothstep(0,200,length(fs_in.vel));
+
+	float speed = length(fs_in.vel);
+	float texCoord = smoothstep(0, 200, speed);
 
 	vec4 color = texture(colorLookUp, rand(fs_in.vel)*pow(texCoord,2));
 
-	float a = 1 - length(2*gl_PointCoord - 1);
-	color.a *= pow(a, 3);
+	float alpha = 1 - length(2*gl_PointCoord - 1);
+	color.a *= pow(alpha, 3);
 
 	fragColor = color;
 }

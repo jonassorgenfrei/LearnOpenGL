@@ -5,7 +5,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-
 #include <learnopengl/shader_m.h>
 #include <learnopengl/shader_c.h>
 #include <learnopengl/camera.h>
@@ -29,7 +28,7 @@ const unsigned int LOCAL_SIZE_OF_WORK_GROUPS = 1000;
 
 // attractor
 glm::vec2 attractorPosition = glm::vec2(0, 0);
-float attractorForce = 0;
+float attractorMult = 0;
 
 // timing 
 float deltaTime = 0.0f; // time between current frame and last frame
@@ -73,68 +72,89 @@ int main(int argc, char* argv[])
 	// get window size
 	int width, height;
 	glfwGetWindowSize(window, &width, &height);
-
-	// set the point size for rendering
-	glPointSize(4);
-	// set background to black
-	glClearColor(0, 0, 0, 1);
-	// enable blending
-	glEnable(GL_BLEND);
-	// set blend function
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	
+	glPointSize(4);							// set the point size for rendering
+	glClearColor(0, 0, 0, 1);				// set background to black
+	glEnable(GL_BLEND);						// enable blending
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);		// set blend function
 
 	// create Look Up Table
 	// -----------------------------------
-	unsigned int LUT = createLookUp();
+
+	GLuint lookUpTable;
+
+	// create a texture
+	glGenTextures(1, &lookUpTable);
+	// bind texture
+	glBindTexture(GL_TEXTURE_1D, lookUpTable);
+
+	// create data texture with rgba-values
+	GLubyte data[4 * 3] = {
+			255, 46 , 15, 25,
+			255, 86 , 31, 50,
+			255, 100, 61, 50
+	};
+
+	// set texture-parameter
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+
+	// create 1D texture from data
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 3, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glBindTexture(GL_TEXTURE_1D, 0);
 
 	// initialize particle simulation buffers
 	// -----------------------------------
-	unsigned int particlePositionBuffer;
-	unsigned int particleVelocityBuffer;
+	GLuint particlePositionBuffer;
+	GLuint particleVelocityBuffer;
 
+	// positions
 	glGenBuffers(1, &particlePositionBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, particlePositionBuffer);
 	glBufferData(GL_ARRAY_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), NULL, GL_STREAM_DRAW);
-	glm::vec2 * positions =  (glm::vec2*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
-	
+
+	glm::vec2 * positions = (glm::vec2*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
+	// copy data to positions 
 	for (int i = 0; i < NUM_PARTICLES; i++) {
 		std::memcpy(&positions[i], &glm::vec2(rand01()* width, rand01()* height), sizeof(glm::vec2));
 	}
 	
 	glUnmapBuffer(GL_ARRAY_BUFFER);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+	// velocities
 	glGenBuffers(1, &particleVelocityBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, particleVelocityBuffer);
 	glBufferData(GL_ARRAY_BUFFER, NUM_PARTICLES * sizeof(glm::vec2), NULL, GL_STREAM_DRAW);
+
 	glm::vec2* velocities = (glm::vec2*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
+	// copy data to positions 
 	for (int i = 0; i < NUM_PARTICLES; i++) {
 		std::memcpy(&velocities[i], &glm::vec2(0, 0), sizeof(glm::vec2*));
 	}
 	glUnmapBuffer(GL_ARRAY_BUFFER);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	// create particle VAO
 	// -------------------
-	unsigned int particlesVAO;
+	GLuint particlesVAO;
 
-	// erstellen des Vertex Attribute Arrays
+	// create vertex attribute arrays
 	glGenVertexArrays(1, &particlesVAO);
 	glBindVertexArray(particlesVAO);
 
-	// binden des Positionsbuffers
+	// bind position buffer
 	glBindBuffer(GL_ARRAY_BUFFER, particlePositionBuffer);
-	// linken des Positionsbuffers an Location 0
+	// linken position buffer to location 0
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-	// binden des Geschwindigkeitsbuffers
+	// bind velocity buffer
 	glBindBuffer(GL_ARRAY_BUFFER, particleVelocityBuffer);
-	// linken des Geschwindigkeitsbuffers an Location 1
+	// link velocity buffers to Location 1
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-	// entbinden des Array Buffers
+	// unbind array buffer
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	// build and compile shaders
@@ -156,7 +176,7 @@ int main(int argc, char* argv[])
 	int frameCounter = 0;				// counter for frames per second
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_1D, LUT);
+	glBindTexture(GL_TEXTURE_1D, lookUpTable);
 
 	glBindVertexArray(particlesVAO);
 
@@ -185,7 +205,7 @@ int main(int argc, char* argv[])
 		computeShader.setFloat("dt", deltaTime);
 		computeShader.setVec2("frameBufferSize", framebufferSize);
 		computeShader.setVec2("attractorPosition", attractorPosition);
-		computeShader.setFloat("attractorForce", attractorForce);
+		computeShader.setFloat("attractorMult", attractorMult);
 
 		glDispatchCompute(NUM_PARTICLES / LOCAL_SIZE_OF_WORK_GROUPS, 1, 1);
 
@@ -242,44 +262,15 @@ void mouse_button_callback(GLFWwindow* window,
 	int action,
 	int mods)
 {
-	attractorForce = 0;
+	attractorMult = 0;
 	if (action == GLFW_PRESS) {
 		if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-			attractorForce = -1.2f;
+			attractorMult = -1.2f;
 		}
 		else if (button == GLFW_MOUSE_BUTTON_LEFT) {
-			attractorForce = 1;
+			attractorMult = 1;
 		}
 	}
-}
-
-/**
- * @brief 1D-Lookup Tabelle erstellen
- */
-unsigned int createLookUp() {
-	unsigned int lookup;
-	// erstellen einer Textur
-	glGenTextures(1, &lookup);
-	// Binden der Textur
-	glBindTexture(GL_TEXTURE_1D, lookup);
-
-	// Daten fuer die Textur erstellen 3 Felder (breite = 3) mit jeweils RGBA-Wert
-	GLubyte data[4 * 3] = {
-			255, 46 , 15, 25,
-			255, 86 , 31, 50,
-			255, 100, 61, 50
-	};
-
-	// Setzen der Textur-Parameter
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-
-	// Erstellen der OpenGL 1D Textur mit den werten 
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 3, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-	glBindTexture(GL_TEXTURE_1D, 0);
-
-	return lookup;
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
