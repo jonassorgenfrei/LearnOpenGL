@@ -14,7 +14,6 @@
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-unsigned int createLookUp();
 
 #define rand01() ((float)rand() / (float)(RAND_MAX))
 
@@ -80,7 +79,6 @@ int main(int argc, char* argv[])
 
 	// create Look Up Table
 	// -----------------------------------
-
 	GLuint lookUpTable;
 
 	// create a texture
@@ -103,6 +101,7 @@ int main(int argc, char* argv[])
 	// create 1D texture from data
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 3, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 	glBindTexture(GL_TEXTURE_1D, 0);
+	
 
 	// initialize particle simulation buffers
 	// -----------------------------------
